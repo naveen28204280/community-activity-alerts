@@ -46,6 +46,10 @@
             padding-right: 2.5rem !important;
         }
 
+        input[type="checkbox"]:checked {
+            accent-color: green;
+        }
+
         #dateSlider {
             user-select: none;
         }
@@ -88,7 +92,7 @@
 
                 <div class="mb-6">
                     <button id="openDateModal"
-                        class="w-full bg-green-500 text-white rounded-md px-4 py-2 hover:bg-green-600">
+                        class="w-full border rounded-md px-4 py-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500">
                         Select Date Range
                     </button>
                     <div id="selectedDateRange" class="mt-2 text-sm text-gray-600">
@@ -106,6 +110,14 @@
                         <input type="checkbox" id="filterUsers" class="mr-2">
                         <label for="filterUsers" class="text-md">Users Count</label>
                     </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="mt-4">
+                    <button id="submitButton"
+                        class="w-full bg-green-500 text-white rounded-md px-4 py-2 hover:bg-green-600">
+                        Submit
+                    </button>
                 </div>
             </div>
         </div>
@@ -229,14 +241,6 @@
         const filterEdits = document.getElementById("filterEdits");
         const filterUsers = document.getElementById("filterUsers");
 
-        filterEdits.addEventListener("change", () => {
-            console.log(filterEdits.checked ? "Filter by edits count enabled" : "Filter by edits count disabled");
-        });
-
-        filterUsers.addEventListener("change", () => {
-            console.log(filterUsers.checked ? "Filter by users count enabled" : "Filter by users count disabled");
-        });
-
         toggleSidebarButton.addEventListener("click", () => {
             isCollapsed = !isCollapsed;
             if (isCollapsed) {
@@ -288,8 +292,9 @@
         }
 
         function updateDateDisplay() {
-            document.getElementById('startDate').textContent = getDateFromValue(startValue);
-            document.getElementById('endDate').textContent = getDateFromValue(endValue);
+            // document.getElementById('startDate').textContent = getDateFromValue(startValue);
+            // document.getElementById('endDate').textContent = getDateFromValue(endValue);
+            document.getElementById('openDateModal').textContent = `${getDateFromValue(startValue)} - ${getDateFromValue(endValue)}`;
         }
 
         // Quick pick functionality
@@ -360,6 +365,64 @@
         // Initial setup
         updateSliderTrack();
         updateDateDisplay();
+
+        // Search functionality
+        function search() {
+            const language = languageDropdown.value;
+            const projectGroup = ProjectGroupDropdown.value;
+            const startDate = getDateFromValue(startValue);
+            const endDate = getDateFromValue(endValue);
+            const editsFilter = filterEdits.checked;
+            const usersFilter = filterUsers.checked;
+
+            console.log(`Searching for ${language} - ${projectGroup} from ${startDate} to ${endDate} with filters - Edits: ${editsFilter}, Users: ${usersFilter}`);
+
+            // Load the new URL
+            window.location.href = `?language=${language}&project_group=${projectGroup}&datestart=${startDate}&dateend=${endDate}&filter_edits=${editsFilter}&filter_users=${usersFilter}`;
+        }
+
+        document.getElementById('submitButton').addEventListener('click', search);
+
+        // Load filters from URL
+        document.addEventListener("DOMContentLoaded", () => {
+            const urlParams = new URLSearchParams(window.location.search);
+
+            // Set language dropdown value
+            const language = urlParams.get("language");
+            if (language) {
+                languageDropdown.value = language;
+                languageDropdown.dispatchEvent(new Event("change"));
+            }
+
+            // Set project group dropdown value
+            const projectGroup = urlParams.get("project_group");
+            if (projectGroup) {
+                const projectGroupOption = Array.from(ProjectGroupDropdown.options).find(option => option.value === projectGroup);
+                if (projectGroupOption) {
+                    ProjectGroupDropdown.value = projectGroup;
+                    ProjectGroupDropdown.dispatchEvent(new Event("change"));
+                }
+            }
+
+            // Set date range
+            const datestart = urlParams.get("datestart");
+            const dateend = urlParams.get("dateend");
+            const dateModal = document.getElementById("openDateModal");
+            if (datestart && dateend) {
+                dateModal.textContent = `${datestart} - ${dateend}`;
+            }
+
+            // Set filter checkboxes
+            const filterEditsValue = urlParams.get("filter_edits");
+            if (filterEditsValue === "true") {
+                filterEdits.checked = true;
+            }
+
+            const filterUsersValue = urlParams.get("filter_users");
+            if (filterUsersValue === "true") {
+                filterUsers.checked = true;
+            }
+        });
     </script>
 </body>
 

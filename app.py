@@ -27,6 +27,21 @@ def get_all_communities():
 
 @app.route('/')
 def index():
+    language = request.args.get('language')
+    project_group = request.args.get('project_group')
+    datestart= request.args.get('datestart')
+    dateend = request.args.get('dateend')
+    filter_edits = request.args.get('filter_edits') == 'true'
+    filter_users = request.args.get('filter_users') == 'true'
+
+    # Process the data as needed
+    print(f"Language: {language}")
+    print(f"Project Group: {project_group}")
+    print(f"Date Start: {datestart}")
+    print(f"Date End: {dateend}")
+    print(f"Filter Edits: {filter_edits}")
+    print(f"Filter Users: {filter_users}")
+
     languages = get_all_communities()
     return render_template('index.html', languages=languages)
 
