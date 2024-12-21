@@ -66,7 +66,7 @@ def log_peaks(peaks):
     for peak in peaks:
         peaks_list.append({
             "timestamp": peak[0].strftime('%Y-%m-%d'),
-            "edits": float(peak[1]),
+            "edits": int(peak[1]),
             "rolling_mean": round(float(peak[2]), 2),
             "threshold": round(float(peak[3]), 2),
             "percentage_difference": round(float(peak[4]), 2)

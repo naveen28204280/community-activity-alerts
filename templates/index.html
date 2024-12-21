@@ -95,9 +95,6 @@
                         class="w-full border rounded-md px-4 py-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500">
                         Select Date Range
                     </button>
-                    <div id="selectedDateRange" class="mt-2 text-sm text-gray-600">
-                        <!-- Selected date range will be displayed here -->
-                    </div>
                 </div>
 
                 <!-- Filters Section -->
@@ -138,7 +135,7 @@
                         <tr class="bg-gray-200">
                             <th class="py-2 px-4 border-b text-left font-semibold">Timestamp</th>
                             <th class="py-2 px-4 border-b text-left font-semibold">Edits</th>
-                            <th class="py-2 px-4 border-b text-left font-semibold">Percentage Difference</th>
+                            <th class="py-2 px-4 border-b text-left font-semibold">Difference</th>
                             <th class="py-2 px-4 border-b text-left font-semibold">Rolling Mean</th>
                             <th class="py-2 px-4 border-b text-left font-semibold">Threshold</th>
                         </tr>
@@ -148,7 +145,7 @@
                         <tr class="hover:bg-gray-100">
                             <td class="py-2 px-4 border-b">{{ entry.timestamp }}</td>
                             <td class="py-2 px-4 border-b">{{ entry.edits }}</td>
-                            <td class="py-2 px-4 border-b">{{ entry.percentage_difference }}</td>
+                            <td class="py-2 px-4 border-b">{{ entry.percentage_difference }}%</td>
                             <td class="py-2 px-4 border-b">{{ entry.rolling_mean }}</td>
                             <td class="py-2 px-4 border-b">{{ entry.threshold }}</td>
                         </tr>
@@ -279,7 +276,6 @@
         const openDateModal = document.getElementById('openDateModal');
         const closeDateModal = document.getElementById('closeDateModal');
         const applyDateRange = document.getElementById('applyDateRange');
-        const selectedDateRange = document.getElementById('selectedDateRange');
 
         const startHandle = document.getElementById('startHandle');
         const endHandle = document.getElementById('endHandle');
@@ -312,7 +308,7 @@
         }
 
         function updateDateDisplay() {
-            document.getElementById('openDateModal').textContent = `${getDateFromValue(startValue)} - ${getDateFromValue(endValue)}`;
+document.getElementById('openDateModal').textContent = `${getDateFromValue(startValue)} - ${getDateFromValue(endValue)}`;
         }
 
         // Quick pick functionality
@@ -364,7 +360,6 @@
         });
 
         applyDateRange.addEventListener('click', () => {
-            selectedDateRange.textContent = `${getDateFromValue(startValue)} - ${getDateFromValue(endValue)}`;
             dateModal.classList.add('hidden');
         });
 
@@ -388,6 +383,7 @@
         function search() {
             const language = languageDropdown.value;
             const projectGroup = ProjectGroupDropdown.value;
+            // TODO: Get startValue and endValue from the dateModal
             const startDate = getDateFromValue(startValue);
             const endDate = getDateFromValue(endValue);
             const editsFilter = filterEdits.checked;
