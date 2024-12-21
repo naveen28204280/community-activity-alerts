@@ -123,16 +123,46 @@
         </div>
 
         <!-- Main Content Section -->
-        <div class="flex-1 p-6">
+        <div id="mainContent" class="flex-1 p-6">
             <div class="text-center mb-6">
                 <h1 class="text-4xl font-bold">Wikimedia Communities Activity Logs</h1>
             </div>
-
-            <div id="selectedProjectGroup" class="text-lg text-green-700 text-center mb-6">
-                <!-- Final selection will be displayed here -->
+        
+            {% if data %}
+            <div class="mb-6">
+                <h2 class="text-2xl text-center font-semibold">{{ data|length }} {{ 'Result' if data|length == 1 else 'Results' }} Found</h2>
             </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white border border-gray-300">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="py-2 px-4 border-b text-left font-semibold">Timestamp</th>
+                            <th class="py-2 px-4 border-b text-left font-semibold">Edits</th>
+                            <th class="py-2 px-4 border-b text-left font-semibold">Percentage Difference</th>
+                            <th class="py-2 px-4 border-b text-left font-semibold">Rolling Mean</th>
+                            <th class="py-2 px-4 border-b text-left font-semibold">Threshold</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in data %}
+                        <tr class="hover:bg-gray-100">
+                            <td class="py-2 px-4 border-b">{{ entry.timestamp }}</td>
+                            <td class="py-2 px-4 border-b">{{ entry.edits }}</td>
+                            <td class="py-2 px-4 border-b">{{ entry.percentage_difference }}</td>
+                            <td class="py-2 px-4 border-b">{{ entry.rolling_mean }}</td>
+                            <td class="py-2 px-4 border-b">{{ entry.threshold }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-500">
+                <p>No data available to display.</p>
+            </div>
+            {% endif %}
         </div>
-
+        
         <!-- Button to toggle sidebar -->
         <button id="toggleSidebar"
             class="toggle-button absolute left-4 top-6 text-gray-700 hover:text-gray-900 transition-colors z-10">
@@ -168,11 +198,6 @@
                     <div id="endHandle"
                         class="absolute w-5 h-5 bg-white border-2 border-green-500 rounded-full cursor-pointer -mt-1.5">
                     </div>
-                </div>
-
-                <div class="mt-4 flex justify-between">
-                    <div id="startDate" class="text-sm font-medium"></div>
-                    <div id="endDate" class="text-sm font-medium"></div>
                 </div>
             </div>
 
@@ -217,7 +242,6 @@
         languageDropdown.addEventListener("change", () => {
             const selectedLanguage = languageDropdown.value;
             ProjectGroupDropdown.innerHTML = '<option value="">Select a Project Group</option>';
-            selectedProjectGroupDiv.textContent = '';
 
             if (selectedLanguage && languages[selectedLanguage]) {
                 const communities = languages[selectedLanguage];
@@ -233,10 +257,6 @@
             }
         });
 
-        ProjectGroupDropdown.addEventListener("change", () => {
-            const selectedProjectGroup = ProjectGroupDropdown.options[ProjectGroupDropdown.selectedIndex];
-            selectedProjectGroupDiv.textContent = `Selected: ${selectedProjectGroup.textContent} (${selectedProjectGroup.value})`;
-        });
 
         const filterEdits = document.getElementById("filterEdits");
         const filterUsers = document.getElementById("filterUsers");
@@ -292,8 +312,6 @@
         }
 
         function updateDateDisplay() {
-            // document.getElementById('startDate').textContent = getDateFromValue(startValue);
-            // document.getElementById('endDate').textContent = getDateFromValue(endValue);
             document.getElementById('openDateModal').textContent = `${getDateFromValue(startValue)} - ${getDateFromValue(endValue)}`;
         }
 
@@ -375,8 +393,6 @@
             const editsFilter = filterEdits.checked;
             const usersFilter = filterUsers.checked;
 
-            console.log(`Searching for ${language} - ${projectGroup} from ${startDate} to ${endDate} with filters - Edits: ${editsFilter}, Users: ${usersFilter}`);
-
             // Load the new URL
             window.location.href = `?language=${language}&project_group=${projectGroup}&datestart=${startDate}&dateend=${endDate}&filter_edits=${editsFilter}&filter_users=${usersFilter}`;
         }
@@ -423,6 +439,7 @@
                 filterUsers.checked = true;
             }
         });
+
     </script>
 </body>
 
