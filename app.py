@@ -15,12 +15,12 @@ def get_all_communities():
     # Extract languages and their communities
     languages = {}
     for key, value in sitematrix.items():
-        if key.isdigit() and 'name' in value:
+        if key.isdigit() and 'localname' in value:
             communities = [
-                {"sitename": site['sitename'], "url": site['url']}
+                {"sitename": site['code'], "url": site['url']}
                 for site in value.get('site', [])
             ]
-            languages[value['name']] = communities
+            languages[value['localname']] = communities
 
     return languages
 
