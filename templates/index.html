@@ -97,8 +97,9 @@
                     </button>
                 </div>
 
+                <!-- TODO -->
                 <!-- Filters Section -->
-                <div class="flex flex-col space-y-4">
+                <!-- <div class="flex flex-col space-y-4">
                     <div class="flex items-center">
                         <input type="checkbox" id="filterEdits" class="mr-2">
                         <label for="filterEdits" class="text-md">Edits Count</label>
@@ -107,7 +108,7 @@
                         <input type="checkbox" id="filterUsers" class="mr-2">
                         <label for="filterUsers" class="text-md">Users Count</label>
                     </div>
-                </div>
+                </div> -->
 
                 <!-- Submit Button -->
                 <div class="mt-4">
@@ -124,10 +125,11 @@
             <div class="text-center mb-6">
                 <h1 class="text-4xl font-bold">Wikimedia Communities Activity Logs</h1>
             </div>
-        
+
             {% if data %}
             <div class="mb-6">
-                <h2 class="text-2xl text-center font-semibold">{{ data|length }} {{ 'Result' if data|length == 1 else 'Results' }} Found</h2>
+                <h2 class="text-2xl text-center font-semibold">{{ data|length }} {{ 'Result' if data|length == 1 else
+                    'Results' }} Found</h2>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full bg-white border border-gray-300">
@@ -159,7 +161,7 @@
             </div>
             {% endif %}
         </div>
-        
+
         <!-- Button to toggle sidebar -->
         <button id="toggleSidebar"
             class="toggle-button absolute left-4 top-6 text-gray-700 hover:text-gray-900 transition-colors z-10">
@@ -308,7 +310,7 @@
         }
 
         function updateDateDisplay() {
-document.getElementById('openDateModal').textContent = `${getDateFromValue(startValue)} - ${getDateFromValue(endValue)}`;
+            document.getElementById('openDateModal').textContent = `${getDateFromValue(startValue)} - ${getDateFromValue(endValue)}`;
         }
 
         // Quick pick functionality
