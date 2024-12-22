@@ -8,7 +8,14 @@ app = Flask(__name__)
 
 def get_all_communities():
     url = 'https://commons.wikimedia.org/w/api.php?action=sitematrix&smtype=language&format=json'
-    response = requests.get(url)
+    headers = {
+        'User-Agent': 'Community Activity Alerts (https://github.com/indictechcom/community-activity-alerts)',
+        'tool': "Community Activity Alerts",
+        'url': "https://github.com/indictechcom/community-activity-alerts",
+        'email': "tools.community-activity-alerts-system@toolforge.org"
+    }
+
+    response = requests.get(url, headers=headers)
     data = response.json()
     sitematrix = data['sitematrix']
     
@@ -131,4 +138,4 @@ def search():
     return jsonify(filtered_communities)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
