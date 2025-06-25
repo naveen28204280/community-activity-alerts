@@ -1,11 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[14]:
-
-
-# fetch_edit_counts.py
-
 import requests
 import pandas as pd
 
@@ -48,24 +40,5 @@ def fetch_edit_counts(
 
     return df
 
-
-# In[15]:
-
-
-#from fetch_edit_counts import fetch_edit_counts
-
 df = fetch_edit_counts("uz.wikipedia.org")
 print(df.head())
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-

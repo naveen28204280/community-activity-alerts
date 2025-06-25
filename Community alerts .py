@@ -1,27 +1,52 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
 #standard deviation
 #t-test
 #seperate functions to find rolling means and calculating peaks
 #significant peaks to be excluded from calculating means but should be shown as peaks in the logs
 
-
-# In[1]:
-
-
-import requests
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
-import duckdb
-from fetch_and_store_script import fetch_edit_counts
+import pymysql
+import configparser
+import requests
 
+def fetch_edit_counts(
+    project: str,
+    start: str = "20200101",
+    end: str = "20240101",
+    editor_type: str = "all-editor-types",
+    page_type: str = "content",
+    granularity: str = "monthly"
+) -> pd.DataFrame:
+    """
+    Fetches edit count data for a given Wikimedia project and returns a DataFrame.
 
-# In[2]:
+    Parameters:
+        project (str): The project domain, e.g., 'uz.wikipedia.org'
+        start (str): Start date in YYYYMMDD format
+        end (str): End date in YYYYMMDD format
+        editor_type (str): Type of editor (default: all-editor-types)
+        page_type (str): Page content type (default: content)
+        granularity (str): Time granularity (default: monthly)
+
+    Returns:
+        pd.DataFrame: A dataframe with columns: timestamp, edit_count, project
+    """
+    base_url = "https://wikimedia.org/api/rest_v1/metrics/edits/aggregate"
+    url = f"{base_url}/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}"
+
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"API Error: {response.status_code} - {response.text}")
+
+    data = response.json()
+    edit_counts = data["items"][0]["results"]
+
+    df = pd.DataFrame(edit_counts)
+    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+    df.rename(columns={'edits': 'edit_count'}, inplace=True)
+    df['project'] = project
+
+    return df
 
 
 # Function to identify peaks based on the rolling mean of the past 3 years
@@ -50,9 +75,6 @@ def find_peaks_rolling_3_years(df, threshold_percentage=0.50):
     return peaks
 
 
-# In[6]:
-
-
 # Log peaks (timestamp, edits, rolling mean, threshold)
 threshold_percentage = 0.30
 def log_peaks(peaks):
@@ -60,16 +82,9 @@ def log_peaks(peaks):
         print(f"Peak: {peak[0].strftime('%Y-%m-%d')}, Edits: {peak[1]}, Rolling Mean: {peak[2]:.2f}, Threshold: {peak[3]:.2f}, percentage difference : {peak[4]: .2f}")
 
 
-# In[7]:
-
-
 df = fetch_edit_counts("uz.wikipedia.org")
 peaks = find_peaks_rolling_3_years(df, threshold_percentage)
 log_peaks(peaks)
-
-
-# In[8]:
-
 
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=df['timestamp'], y=df['edit_count'], mode='lines+markers', name='Edits', line=dict(color='blue')))
@@ -90,25 +105,74 @@ fig.update_layout(
 # Display the plot
 fig.show()
 
+# Convert peaks data to DataFrame
+peaks_df = pd.DataFrame(peaks, columns=["Timestamp", "Edit_count", "Rolling_mean", "Threshold", "Percentage_Difference"])
 
-# In[9]:
+# --- Load Toolforge DB credentials from replica.my.cnf ---
 
+cfg = configparser.ConfigParser()
+cfg.read('/data/project/community-activity-alerts-system/replica.my.cnf')
+user = cfg['client']['user']
+password = cfg['client']['password']
 
-my_df=pd.DataFrame(peaks,columns=[["Timestamp","Edit_count","Rolling_mean","Threshold","Percentage_Difference"]])
-my_df
+# --- Config for database ---
+DB_NAME = 's56391__community_alerts'
+DB_TABLE = 'community_alert_logs_table'
 
+try:
+    # Connect to the Toolforge database
+    conn = pymysql.connect(
+        host='tools.db.svc.wikimedia.cloud',
+        user=user,
+        password=password,
+        database=DB_NAME,
+        charset='utf8mb4',
+        autocommit=True
+    )
 
-# In[8]:
+    cursor = conn.cursor()
 
+    # Create table if it doesn't exist
+    create_table_sql = f'''
+    CREATE TABLE IF NOT EXISTS {DB_TABLE} (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        timestamp DATETIME,
+        edit_count INT,
+        rolling_mean FLOAT,
+        threshold FLOAT,
+        percentage_difference FLOAT,
+        project VARCHAR(255)
+    )
+    '''
+    cursor.execute(create_table_sql)
 
-duckdb.sql("CREATE TABLE community_alert_logs_table AS SELECT * FROM my_df")
+    # Insert peaks data into the table
+    for _, row in peaks_df.iterrows():
+        insert_sql = f"""
+        INSERT INTO {DB_TABLE} (timestamp, edit_count, rolling_mean, threshold, percentage_difference, project)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(insert_sql, (
+            row['Timestamp'].to_pydatetime(), 
+            int(row['Edit_count']), 
+            float(row['Rolling_mean']), 
+            float(row['Threshold']), 
+            float(row['Percentage_Difference']),
+            df['project'].iloc[0]  # Using the project from the original dataframe
+        ))
 
-duckdb.sql("INSERT INTO community_alert_logs_table SELECT * FROM my_df")
+    # Display the results
+    cursor.execute(f"SELECT * FROM {DB_TABLE} LIMIT 10")
+    result = cursor.fetchall()
+    print("Data saved to Toolforge database.")
+    print("Recent entries:")
+    for row in result:
+        print(row)
 
+    cursor.close()
+    conn.close()
 
-# In[ ]:
-
-
-duckdb.sql("SELECT * FROM community_alert_logs_table LIMIT 10")
-
-
+except Exception as e:
+    print(f"Database connection error: {e}")
+    print("Displaying peaks data without database storage:")
+    print(peaks_df)
