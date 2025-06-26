@@ -10,7 +10,7 @@ import requests
 import pandas as pd
 import pymysql
 import configparser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 # --- Load Toolforge DB credentials ---
 cfg = configparser.ConfigParser()
@@ -36,8 +36,13 @@ today = datetime.utcnow().date().replace(day=1)
 last_month_end = today - timedelta(days=1)
 last_month_start = last_month_end.replace(day=1)
 
+from datetime import date
+if last_month_end > date.today():
+    print("Last month is in the future. Exiting.")
+    exit(1)
+
 start = last_month_start.strftime("%Y%m%d")
-end = last_month_end.strftime("%Y%m%d")
+end = today.strftime("%Y%m%d")  # Use the 1st of the current month as the exclusive end date
 
 # --- Connect to Toolforge DB ---
 DB_NAME = 's56391__community_alerts'
