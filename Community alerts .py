@@ -1,52 +1,29 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
 #standard deviation
 #t-test
 #seperate functions to find rolling means and calculating peaks
 #significant peaks to be excluded from calculating means but should be shown as peaks in the logs
 
+
+# In[1]:
+
+
+import requests
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
+import duckdb
+from fetch_and_store_script import fetch_edit_counts
 import pymysql
 import configparser
-import requests
 
-def fetch_edit_counts(
-    project: str,
-    start: str = "20200101",
-    end: str = "20240101",
-    editor_type: str = "all-editor-types",
-    page_type: str = "content",
-    granularity: str = "monthly"
-) -> pd.DataFrame:
-    """
-    Fetches edit count data for a given Wikimedia project and returns a DataFrame.
 
-    Parameters:
-        project (str): The project domain, e.g., 'uz.wikipedia.org'
-        start (str): Start date in YYYYMMDD format
-        end (str): End date in YYYYMMDD format
-        editor_type (str): Type of editor (default: all-editor-types)
-        page_type (str): Page content type (default: content)
-        granularity (str): Time granularity (default: monthly)
-
-    Returns:
-        pd.DataFrame: A dataframe with columns: timestamp, edit_count, project
-    """
-    base_url = "https://wikimedia.org/api/rest_v1/metrics/edits/aggregate"
-    url = f"{base_url}/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}"
-
-    response = requests.get(url)
-    if response.status_code != 200:
-        raise Exception(f"API Error: {response.status_code} - {response.text}")
-
-    data = response.json()
-    edit_counts = data["items"][0]["results"]
-
-    df = pd.DataFrame(edit_counts)
-    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
-    df.rename(columns={'edits': 'edit_count'}, inplace=True)
-    df['project'] = project
-
-    return df
+# In[2]:
 
 
 # Function to identify peaks based on the rolling mean of the past 3 years
@@ -75,6 +52,9 @@ def find_peaks_rolling_3_years(df, threshold_percentage=0.50):
     return peaks
 
 
+# In[6]:
+
+
 # Log peaks (timestamp, edits, rolling mean, threshold)
 threshold_percentage = 0.30
 def log_peaks(peaks):
@@ -82,9 +62,43 @@ def log_peaks(peaks):
         print(f"Peak: {peak[0].strftime('%Y-%m-%d')}, Edits: {peak[1]}, Rolling Mean: {peak[2]:.2f}, Threshold: {peak[3]:.2f}, percentage difference : {peak[4]: .2f}")
 
 
-df = fetch_edit_counts("uz.wikipedia.org")
+
+
+# --- Load Toolforge DB credentials from replica.my.cnf ---
+cfg = configparser.ConfigParser()
+cfg.read('/data/project/community-activity-alerts-system/replica.my.cnf')
+user = cfg['client']['user']
+password = cfg['client']['password']
+
+# --- Database connection config ---
+DB_NAME = 's56391__community_alerts'
+DB_TABLE = 'edit_counts'
+
+# --- Connect and read data into DataFrame ---
+conn = pymysql.connect(
+    host='tools.db.svc.wikimedia.cloud',
+    user=user,
+    password=password,
+    database=DB_NAME,
+    charset='utf8mb4'
+)
+
+query = f"SELECT * FROM {DB_TABLE}"
+df = pd.read_sql(query, conn)
+
+conn.close()
+
+#convert timestamp to datetime if not already ---
+df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+
+
+#df = fetch_edit_counts("uz.wikipedia.org")
 peaks = find_peaks_rolling_3_years(df, threshold_percentage)
 log_peaks(peaks)
+
+
+# In[8]:
+
 
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=df['timestamp'], y=df['edit_count'], mode='lines+markers', name='Edits', line=dict(color='blue')))
@@ -105,74 +119,151 @@ fig.update_layout(
 # Display the plot
 fig.show()
 
-# Convert peaks data to DataFrame
-peaks_df = pd.DataFrame(peaks, columns=["Timestamp", "Edit_count", "Rolling_mean", "Threshold", "Percentage_Difference"])
 
-# --- Load Toolforge DB credentials from replica.my.cnf ---
+# In[9]:
 
-cfg = configparser.ConfigParser()
-cfg.read('/data/project/community-activity-alerts-system/replica.my.cnf')
-user = cfg['client']['user']
-password = cfg['client']['password']
 
-# --- Config for database ---
-DB_NAME = 's56391__community_alerts'
-DB_TABLE = 'community_alert_logs_table'
+my_df=pd.DataFrame(peaks,columns=[["Timestamp","Edit_count","Rolling_mean","Threshold","Percentage_Difference"]])
+my_df
 
-try:
-    # Connect to the Toolforge database
-    conn = pymysql.connect(
-        host='tools.db.svc.wikimedia.cloud',
-        user=user,
-        password=password,
-        database=DB_NAME,
-        charset='utf8mb4',
-        autocommit=True
-    )
 
-    cursor = conn.cursor()
+# In[8]:
 
-    # Create table if it doesn't exist
-    create_table_sql = f'''
-    CREATE TABLE IF NOT EXISTS {DB_TABLE} (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        timestamp DATETIME,
-        edit_count INT,
-        rolling_mean FLOAT,
-        threshold FLOAT,
-        percentage_difference FLOAT,
-        project VARCHAR(255)
-    )
-    '''
-    cursor.execute(create_table_sql)
 
-    # Insert peaks data into the table
-    for _, row in peaks_df.iterrows():
-        insert_sql = f"""
-        INSERT INTO {DB_TABLE} (timestamp, edit_count, rolling_mean, threshold, percentage_difference, project)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(insert_sql, (
-            row['Timestamp'].to_pydatetime(), 
-            int(row['Edit_count']), 
-            float(row['Rolling_mean']), 
-            float(row['Threshold']), 
-            float(row['Percentage_Difference']),
-            df['project'].iloc[0]  # Using the project from the original dataframe
-        ))
+duckdb.sql("CREATE TABLE community_alert_logs_table AS SELECT * FROM my_df")
 
-    # Display the results
-    cursor.execute(f"SELECT * FROM {DB_TABLE} LIMIT 10")
-    result = cursor.fetchall()
-    print("Data saved to Toolforge database.")
-    print("Recent entries:")
-    for row in result:
-        print(row)
+duckdb.sql("INSERT INTO community_alert_logs_table SELECT * FROM my_df")
 
-    cursor.close()
-    conn.close()
 
-except Exception as e:
-    print(f"Database connection error: {e}")
-    print("Displaying peaks data without database storage:")
-    print(peaks_df)
+# In[ ]:
+
+
+duckdb.sql("SELECT * FROM community_alert_logs_table LIMIT 10")
+
+
+# In[9]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[10]:
+
+
+import duckdb
+
+# Use in-memory DuckDB instance
+con = duckdb.connect()
+
+# Create and populate tables as before
+con.execute("""
+CREATE TABLE language_projects (
+    code TEXT,
+    local_name TEXT,
+    database_name TEXT,
+    site_name TEXT,
+    url TEXT
+);
+""")
+
+con.execute("""
+INSERT INTO language_projects VALUES 
+('aa', 'Afar', 'aawiki', 'Wikipedia', 'https://aa.wikipedia.org'),
+('aa', 'Afar', 'aawiktionary', 'Wiktionary', 'https://aa.wiktionary.org'),
+('ab', 'Abkhazian', 'abwiki', 'Авикипедиа', 'https://ab.wikipedia.org');
+""")
+
+con.execute("""
+CREATE TABLE edit_counts (
+    editcount_P1key INTEGER,
+    timestamp TIMESTAMP,
+    project TEXT,
+    editor_type TEXT,
+    page_type TEXT,
+    edit_count INTEGER
+);
+""")
+
+con.execute("""
+INSERT INTO edit_counts VALUES 
+(1, '2023-12-01 10:15:45', 'aawiki', NULL, 'content', 100),
+(2, '2023-11-01 20:08:34', 'aawiktionary', NULL, 'content', 24),
+(3, '2023-01-17 05:03:00', 'enwiki', NULL, 'content', 58);
+""")
+
+con.execute("""
+CREATE TABLE editcount_surges (
+    project TEXT,
+    editcount_P1key INTEGER,
+    difference INTEGER,
+    rolling_mean INTEGER,
+    threshold_percentage INTEGER,
+    event_cause TEXT
+);
+""")
+
+con.execute("""
+INSERT INTO editcount_surges VALUES 
+('aawiki', 1, 150, 50, 20, 'Campaign name'),
+('aawiktionary', 2, 20, 23, 20, 'Campaign name'),
+('enwiki', 3, 60, 84, 20, 'Campaign name');
+""")
+
+con.execute("""
+CREATE TABLE user_registration_surges (
+    project TEXT,
+    timestamp TIMESTAMP,
+    new_users INTEGER,
+    difference INTEGER,
+    rolling_mean INTEGER,
+    threshold_percentage INTEGER,
+    event_cause TEXT
+);
+""")
+
+print("✅ In-memory tables created and populated.")
+
+
+# In[ ]:
+
+
+
+
+
+# In[11]:
+
+
+import duckdb
+import pandas as pd
+
+# Example DataFrame (replace this with API response DataFrame)
+my_df = pd.DataFrame({
+    "code": ["aa", "aa", "ab"],
+    "local_name": ["Afar", "Afar", "Abkhazian"],
+    "database_name": ["aawiki", "aawiktionary", "abwiki"],
+    "site_name": ["Wikipedia", "Wiktionary", "Авикипедиа"],
+    "url": [
+        "https://aa.wikipedia.org",
+        "https://aa.wiktionary.org",
+        "https://ab.wikipedia.org"
+    ]
+})
+
+# Connect to DuckDB (in-memory or file)
+con = duckdb.connect()
+
+# Create table from DataFrame
+con.sql("CREATE TABLE community_alert_logs_table AS SELECT * FROM my_df")
+
+
+# In[ ]:
+
+
+
+
