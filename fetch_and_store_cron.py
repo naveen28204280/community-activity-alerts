@@ -1,16 +1,16 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 #!/usr/bin/env python3
 
 import requests
 import pandas as pd
 import pymysql
 import configparser
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
+import logging
+import time
+from random import uniform
+
+# --- Configure logging ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Load Toolforge DB credentials ---
 cfg = configparser.ConfigParser()
@@ -18,31 +18,34 @@ cfg.read('/data/project/community-activity-alerts-system/replica.my.cnf')
 user = cfg['client']['user']
 password = cfg['client']['password']
 
-# --- Define constants ---
-projects = [
-    "uz.wikipedia.org",
-    "en.wikipedia.org",
-    "hi.wikipedia.org",
-    "bn.wikipedia.org"
-    # Add more as needed
-]
-base_url = "https://wikimedia.org/api/rest_v1/metrics/edits/aggregate"
-editor_type = "all-editor-types"
-page_type = "content"
-granularity = "monthly"
+# --- Fetch project list from SiteMatrix ---
+sitematrix_url = "https://meta.wikimedia.org/w/api.php?action=sitematrix&format=json"
+response = requests.get(sitematrix_url)
+data = response.json()
 
-# --- Calculate last month's date range ---
+projects = set()
+sitematrix = data.get("sitematrix", {})
+
+for key, val in sitematrix.items():
+    if key in ("count", "specials"):
+        continue
+    if isinstance(val, dict):
+        sites = val.get("site", [])
+        for site in sites:
+            if site.get("closed"):
+                continue
+            site_url = site.get("url")
+            if site_url:
+                cleaned_url = site_url.replace("https://", "")
+                projects.add(cleaned_url)
+
+# --- Date range for last month ---
 today = datetime.utcnow().date().replace(day=1)
 last_month_end = today - timedelta(days=1)
 last_month_start = last_month_end.replace(day=1)
 
-from datetime import date
-if last_month_end > date.today():
-    print("Last month is in the future. Exiting.")
-    exit(1)
-
 start = last_month_start.strftime("%Y%m%d")
-end = today.strftime("%Y%m%d")  # Use the 1st of the current month as the exclusive end date
+end = last_month_end.strftime("%Y%m%d")
 
 # --- Connect to Toolforge DB ---
 DB_NAME = 's56391__community_alerts'
@@ -59,7 +62,7 @@ conn = pymysql.connect(
 
 cursor = conn.cursor()
 
-# --- Ensure table exists ---
+# --- Ensure main table exists ---
 create_table_sql = f'''
 CREATE TABLE IF NOT EXISTS {DB_TABLE} (
     timestamp DATETIME,
@@ -70,24 +73,41 @@ CREATE TABLE IF NOT EXISTS {DB_TABLE} (
 '''
 cursor.execute(create_table_sql)
 
-# --- Loop through each project and process ---
-for project in projects:
-    print(f"Fetching edits for {project} from {start} to {end}")
+# --- Optional: Metadata table for fetch status ---
+# cursor.execute('''
+# CREATE TABLE IF NOT EXISTS fetch_runs (
+#     run_time DATETIME,
+#     project VARCHAR(255),
+#     status VARCHAR(20),
+#     message TEXT
+# )
+# ''')
+
+# --- API config ---
+base_url = "https://wikimedia.org/api/rest_v1/metrics/edits/aggregate"
+editor_type = "all-editor-types"
+page_type = "content"
+granularity = "monthly"
+
+# --- Loop through projects ---
+for project in sorted(projects):
+    logging.info(f"Fetching edits for {project} from {start} to {end}")
 
     url = f"{base_url}/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}"
     response = requests.get(url)
     if response.status_code != 200:
-        print(f"API Error for {project}: {response.status_code} - {response.text}")
+        logging.warning(f"API Error for {project}: {response.status_code} - {response.text}")
+        time.sleep(uniform(1, 3))  # Sleep before next request
         continue
 
     try:
         data = response.json()
         edit_counts = data["items"][0]["results"]
         if not edit_counts:
-            print(f"No data returned for {project}")
+            logging.info(f"No data returned for {project}")
             continue
     except Exception as e:
-        print(f"Parsing error for {project}: {e}")
+        logging.error(f"Parsing error for {project}: {e}")
         continue
 
     df = pd.DataFrame(edit_counts)
@@ -96,19 +116,22 @@ for project in projects:
     df.rename(columns={'edits': 'edit_count'}, inplace=True)
 
     for _, row in df.iterrows():
-        insert_sql = f"""
-        INSERT INTO {DB_TABLE} (timestamp, edit_count, project)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE edit_count = VALUES(edit_count)
-        """
-        cursor.execute(
-            insert_sql,
-            (row['timestamp'].to_pydatetime(), int(row['edit_count']), row['project'])
-        )
+        try:
+            insert_sql = f"""
+            INSERT INTO {DB_TABLE} (timestamp, edit_count, project)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE edit_count = VALUES(edit_count)
+            """
+            cursor.execute(
+                insert_sql,
+                (row['timestamp'].to_pydatetime(), int(row['edit_count']), row['project'])
+            )
+        except Exception as e:
+            logging.error(f"DB insert failed for {project}: {e}")
+            continue
 
-print("All data saved successfully.")
+logging.info("All data saved successfully.")
 
 # --- Cleanup ---
 cursor.close()
 conn.close()
-
