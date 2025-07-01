@@ -4,7 +4,6 @@ import pandas as pd
 import pymysql
 import configparser
 import logging
-from datetime import datetime
 
 # --- Setup logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
