@@ -161,6 +161,10 @@
             {% endif %}
         </div>
 
+        {% if chart %}
+        <div>{{ chart|safe }}</div>
+        {% endif %}
+
         <!-- Button to toggle sidebar -->
         <button id="toggleSidebar"
             class="toggle-button absolute left-4 top-6 text-gray-700 hover:text-gray-900 transition-colors z-10">
