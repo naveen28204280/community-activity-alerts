@@ -9,7 +9,7 @@ from plotly.io import to_html
 import calendar
 
 app = Flask(__name__)
-
+ALERTS_TABLE = 'community_alerts'
 
 # --- DB connection setup ---
 def get_db_connection():
@@ -202,6 +202,34 @@ def search():
         if "name" in value and query in value["name"].lower()
     ]
     return jsonify(filtered_communities)
+
+
+# --- Route for recieving the label and peak data to store in Community Alerts table ---
+@app.route("/add-label", methods=["POST"])
+def add_label():
+    data = request.json
+    if not all(field in data for field in ["project", "timestamp", "label"]):
+        return (jsonify({'error': 'Missing required fields'}), 400)
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # Ensure label column exits
+            cursor.execute(f"SHOW COLUMNS FROM {ALERTS_TABLE} LIKE 'label';")
+            if cursor.fetchone() is None:
+                cursor.execute(f"ALTER TABLE {ALERTS_TABLE} ADD COLUMN label VARCHAR(255);")
+                conn.commit()
+            # Insert into the table
+            cursor.execute(f"""
+                UPDATE {ALERTS_TABLE}
+                SET label = %s
+                WHERE project = %s AND timestamp = %s;
+            """, (data["label"], data["project"], data["timestamp"]))
+            conn.commit()
+            return (jsonify({'success': 'Successfully added the annotation'}), 200)
+    except Exception as e:
+        return (jsonify({'error': str(e)}), 500)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
