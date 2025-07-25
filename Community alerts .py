@@ -68,6 +68,7 @@ def main():
             rolling_mean FLOAT,
             threshold FLOAT,
             percentage_difference FLOAT,
+            label VARCHAR(255),
             PRIMARY KEY (project, timestamp)
         )
         """)
