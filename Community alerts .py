@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import pandas as pd
+import polars as pl
 import pymysql
 import configparser
 import logging
@@ -20,15 +20,16 @@ ALERTS_TABLE = 'community_alerts'
 
 # --- Function to detect peaks ---
 def find_peaks_rolling_3_years(df, threshold_percentage=0.30):
-    df = df.sort_values("timestamp").reset_index(drop=True)
+    df = df.sort("timestamp")
     peaks = []
 
     for i in range(len(df)):
-        t_i = df.at[i, "timestamp"]
-        edits_i = df.at[i, "edit_count"]
+        row = df.row(i)
+        t_i = row[df.columns.index("timestamp")]
+        edits_i = row[df.columns.index("edit_count")]
 
-        window = df[(df["timestamp"] >= t_i - pd.DateOffset(years=3)) & (df["timestamp"] <= t_i)]
-        if window.empty:
+        window = df.filter((df["timestamp"] >= t_i - pl.duration(years=3)) & (df["timestamp"] <= t_i))
+        if window.is_empty():
             continue
 
         rolling_mean = window["edit_count"].mean()
@@ -73,8 +74,12 @@ def main():
         """)
 
     # Read full edit data
-    df = pd.read_sql(f"SELECT * FROM {SOURCE_TABLE}", conn)
-    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+    with conn.cursor() as cursor:
+        cursor.execute(f"SELECT * FROM {SOURCE_TABLE};")
+        result=cursor.fetchall()
+        columns = [i[0] for i in cursor.description]
+    df = pl.DataFrame(result, schema=columns)
+    df = df.with_columns(pl.col("timestamp").str.to_datetime())
 
     # Process each project
     for project, group in df.groupby("project"):
