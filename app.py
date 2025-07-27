@@ -16,8 +16,7 @@ app.secret_key = "asdasdafdfasdfadshafgjkasdhfgaksjdhfgaskdjhfgsadkjhfgdhs"
 mwo_auth = MWOAuth(
     base_url="https://meta.wikimedia.org/w",
     consumer_key=os.getenv("CONSUMER_KEY"),
-    consumer_secret=os.getenv("CONSUMER_SECRET"),
-    user_agent= getHeader()['User-Agent']
+    consumer_secret=os.getenv("CONSUMER_SECRET")
 )
 app.register_blueprint(mwo_auth.bp)
 
@@ -158,6 +157,7 @@ def index():
                 data=[],
                 chart=None,
                 message="No data available.",
+                user = mwo_auth.get_current_user()
             )
 
         df["timestamp"] = pd.to_datetime(df["timestamp"])
@@ -228,7 +228,7 @@ def index():
         chart_html = to_html(fig, full_html=False, include_plotlyjs="cdn")
 
         return render_template(
-            "index.html", languages=get_all_communities(), data=peaks, chart=chart_html
+            "index.html", languages=get_all_communities(), data=peaks, chart=chart_html, user = mwo_auth.get_current_user()
         )
 
     except Exception as e:
