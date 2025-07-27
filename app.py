@@ -127,7 +127,7 @@ def index():
         return render_template(
             "index.html",
             languages=get_all_communities(),
-            User=mwo_auth.get_current_user(True),
+            user=mwo_auth.get_current_user(True),
         )
 
     project = project_group.split(":/")[1][1:]  # e.g. "en.wikipedia.org"
