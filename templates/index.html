@@ -642,6 +642,7 @@
                         this.searchTerm = '';
                         this.input.value = '';
                         this.input.placeholder = 'Search projects...';
+
                         this.showProjects();
                     });
                 }
@@ -662,6 +663,7 @@
                 this.searchTerm = '';
                 this.input.value = '';
                 this.input.placeholder = `Search ${this.data[projectKey].name} languages...`;
+
                 this.input.removeAttribute('readonly'); // Keep input editable for language search
                 this.showLanguages();
             }
